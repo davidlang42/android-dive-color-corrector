@@ -1,5 +1,9 @@
 package com.davidlang.divecolorcorrector
 
+import android.R.attr
+import android.app.Activity
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -11,15 +15,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.davidlang.divecolorcorrector.ui.theme.DiveColorCorrectorTheme
+
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -31,7 +34,8 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background,
                 ) {
                     Box(
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier
+                            .fillMaxSize()
                             .clipToBounds()
                             .clickable(onClick = { showFilePicker() }),
                         contentAlignment = Alignment.Center
@@ -49,7 +53,28 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun showFilePicker(): Unit {
-        Toast.makeText(this, "STUB: showFilePicker", Toast.LENGTH_LONG).show();
+    private fun showFilePicker() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "image/jpeg"
+        }
+
+        startActivityForResult(intent, PICK_IMAGE)
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (resultCode == Activity.RESULT_OK) {
+            when(requestCode) {
+                PICK_IMAGE -> {
+                    val uri: Uri? = data?.data
+                    val src = uri?.path
+                    Toast.makeText(this, "STUB: picked: $src", Toast.LENGTH_LONG).show();
+                }
+                else -> throw Exception("Invalid request code: $requestCode")
+            }
+        }
     }
 }
+
+const val PICK_IMAGE = 1;
