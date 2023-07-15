@@ -72,13 +72,13 @@ class MainActivity : ComponentActivity() {
         if (resultCode == Activity.RESULT_OK) {
             when(requestCode) {
                 PICK_IMAGE -> {
-                    val uri: Uri? = data?.data
-                    if (uri == null) {
+                    val src: String? = data?.data?.toString()
+                    if (src == null) {
                         Toast.makeText(this, "Missing file path", Toast.LENGTH_SHORT).show()
                     } else {
-                        val bitmap = getBitmapFromUri(uri)
+                        val bitmap = getBitmapFromUri(src)
                         if (bitmap == null) {
-                            Toast.makeText(this, "Image ${uri.path} could not be loaded", Toast.LENGTH_LONG).show();
+                            Toast.makeText(this, "Image $src could not be loaded", Toast.LENGTH_LONG).show();
                         } else {
                             Toast.makeText(this, "STUB: width: ${bitmap.width} height: ${bitmap.height}", Toast.LENGTH_LONG).show();
                         }
@@ -90,7 +90,8 @@ class MainActivity : ComponentActivity() {
     }
 
     @Throws(IOException::class)
-    private fun getBitmapFromUri(uri: Uri): Bitmap? {
+    private fun getBitmapFromUri(src: String): Bitmap? {
+        val uri = Uri.parse(src)
         val parcelFileDescriptor: ParcelFileDescriptor =
             contentResolver.openFileDescriptor(uri, "r") ?: return null
         val fileDescriptor: FileDescriptor = parcelFileDescriptor.fileDescriptor
