@@ -3,8 +3,11 @@ package com.davidlang.divecolorcorrector
 import android.R.attr
 import android.app.Activity
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Bundle
+import android.os.ParcelFileDescriptor
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -22,6 +25,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.davidlang.divecolorcorrector.ui.theme.DiveColorCorrectorTheme
+import java.io.FileDescriptor
+import java.io.IOException
 
 
 class MainActivity : ComponentActivity() {
@@ -68,12 +73,30 @@ class MainActivity : ComponentActivity() {
             when(requestCode) {
                 PICK_IMAGE -> {
                     val uri: Uri? = data?.data
-                    val src = uri?.path
-                    Toast.makeText(this, "STUB: picked: $src", Toast.LENGTH_LONG).show();
+                    if (uri == null) {
+                        Toast.makeText(this, "Missing file path", Toast.LENGTH_SHORT).show()
+                    } else {
+                        val bitmap = getBitmapFromUri(uri)
+                        if (bitmap == null) {
+                            Toast.makeText(this, "Image ${uri.path} could not be loaded", Toast.LENGTH_LONG).show();
+                        } else {
+                            Toast.makeText(this, "STUB: width: ${bitmap.width} height: ${bitmap.height}", Toast.LENGTH_LONG).show();
+                        }
+                    }
                 }
                 else -> throw Exception("Invalid request code: $requestCode")
             }
         }
+    }
+
+    @Throws(IOException::class)
+    private fun getBitmapFromUri(uri: Uri): Bitmap? {
+        val parcelFileDescriptor: ParcelFileDescriptor =
+            contentResolver.openFileDescriptor(uri, "r") ?: return null
+        val fileDescriptor: FileDescriptor = parcelFileDescriptor.fileDescriptor
+        val image: Bitmap = BitmapFactory.decodeFileDescriptor(fileDescriptor)
+        parcelFileDescriptor.close()
+        return image
     }
 }
 
