@@ -1,11 +1,13 @@
 package com.davidlang.divecolorcorrector
 
+import android.R.attr
+import android.app.Activity
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -52,13 +54,27 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun showFilePicker() {
-        val pickMultipleMedia = registerForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(5)) { uris ->
-            if (uris.isNotEmpty()) {
-                Toast.makeText(this, "STUB: ${uris.size} files", Toast.LENGTH_LONG).show()
-            } else {
-                Toast.makeText(this, "STUB: No media", Toast.LENGTH_LONG).show()
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "image/jpeg"
+        }
+
+        startActivityForResult(intent, PICK_IMAGE)
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (resultCode == Activity.RESULT_OK) {
+            when(requestCode) {
+                PICK_IMAGE -> {
+                    val uri: Uri? = data?.data
+                    val src = uri?.path
+                    Toast.makeText(this, "STUB: picked: $src", Toast.LENGTH_LONG).show();
+                }
+                else -> throw Exception("Invalid request code: $requestCode")
             }
         }
-        pickMultipleMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
     }
 }
+
+const val PICK_IMAGE = 1;
