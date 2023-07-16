@@ -2,6 +2,7 @@ package com.davidlang.divecolorcorrector
 
 import android.app.Activity
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -65,12 +66,15 @@ class MainActivity : ComponentActivity() {
         if (resultCode == Activity.RESULT_OK) {
             when(requestCode) {
                 PICK_IMAGE -> {
-                    val src: String? = data?.data?.toString()
-                    if (src == null) {
+                    val uri = data?.data
+                    if (uri == null) {
                         Toast.makeText(this, "Missing file path", Toast.LENGTH_SHORT).show()
                     } else {
-                        val intent = Intent(this, ImageActivity::class.java)
-                        intent.putExtra("imageSrc", src)
+                        val intent = Intent(this, ImageActivity::class.java).apply {
+                            action = Intent.ACTION_SEND
+                            type = "image/*"
+                            putExtra(Intent.EXTRA_STREAM, uri)
+                        }
                         startActivity(intent)
                         finish()
                     }

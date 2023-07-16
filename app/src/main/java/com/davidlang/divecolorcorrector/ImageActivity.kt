@@ -1,10 +1,12 @@
 package com.davidlang.divecolorcorrector
 
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Bundle
 import android.os.ParcelFileDescriptor
+import android.os.Parcelable
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -31,14 +33,22 @@ import java.io.IOException
 class ImageActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val src = intent.getStringExtra("imageSrc")
-        if (src == null) {
-            Toast.makeText(this, "Intent did not specify image src", Toast.LENGTH_SHORT).show()
+        if (intent?.action != Intent.ACTION_SEND) {
+            Toast.makeText(this, "Expected send action", Toast.LENGTH_SHORT).show()
             return
         }
-        val bitmap = getBitmapFromUri(src)
+        if (intent.type?.startsWith("image/") != true) {
+            Toast.makeText(this, "Expected image MIME type", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val uri = intent.getParcelableExtra<Parcelable>(Intent.EXTRA_STREAM) as? Uri
+        if (uri == null) {
+            Toast.makeText(this, "Intent did not specify image uri", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val bitmap = getBitmapFromUri(uri)
         if (bitmap == null) {
-            Toast.makeText(this, "Image $src could not be loaded", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Image uri could not be loaded", Toast.LENGTH_LONG).show()
             return
         }
         setContent {
@@ -78,8 +88,7 @@ class ImageActivity : ComponentActivity() {
     }
 
     @Throws(IOException::class)
-    private fun getBitmapFromUri(src: String): Bitmap? {
-        val uri = Uri.parse(src)
+    private fun getBitmapFromUri(uri: Uri): Bitmap? {
         val parcelFileDescriptor: ParcelFileDescriptor =
             contentResolver.openFileDescriptor(uri, "r") ?: return null
         val fileDescriptor: FileDescriptor = parcelFileDescriptor.fileDescriptor
