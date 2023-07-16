@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Bundle
+import android.os.Environment
 import android.os.ParcelFileDescriptor
 import android.os.Parcelable
 import android.widget.Toast
@@ -34,6 +35,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.davidlang.divecolorcorrector.ui.theme.DiveColorCorrectorTheme
+import java.io.File
 import java.io.FileDescriptor
 import java.io.IOException
 
@@ -77,7 +79,28 @@ class ImageActivity : ComponentActivity() {
                         ImageContent(image)
                     }
                 }
-                FooterContent(bitmap != null)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Button(
+                        onClick = { finish() },
+                        modifier = Modifier.padding(10.dp)
+                    ) {
+                        Text("Cancel", fontSize = 20.sp)
+                    }
+                    if (bitmap != null) {
+                        Button(
+                            onClick = {
+                                saveBitmap(bitmap!!, uri)
+                                finish()
+                            },
+                            modifier = Modifier.padding(10.dp),
+                        ) {
+                            Text("Save a copy", fontSize = 20.sp)
+                        }
+                    }
+                }
             }
         }
         Thread {
@@ -90,29 +113,6 @@ class ImageActivity : ComponentActivity() {
                 bitmap = corrector.bitmap
             }
         }.start()
-    }
-
-    @Composable
-    fun FooterContent(canSave: Boolean) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Button(
-                onClick = {},
-                modifier = Modifier.padding(10.dp)
-            ) {
-                Text("Cancel", fontSize = 20.sp)
-            }
-            if (canSave) {
-                Button(
-                    onClick = {},
-                    modifier = Modifier.padding(10.dp),
-                ) {
-                    Text("Save a copy", fontSize = 20.sp)
-                }
-            }
-        }
     }
 
     @Composable
@@ -138,5 +138,23 @@ class ImageActivity : ComponentActivity() {
         val image: Bitmap = BitmapFactory.decodeFileDescriptor(fileDescriptor)
         parcelFileDescriptor.close()
         return image
+    }
+
+    private fun saveBitmap(bitmap: Bitmap, originalUri: Uri) {
+        val oldFileName = originalUri.lastPathSegment ?: "unknown"
+        val filePath = Environment.getExternalStorageDirectory().absolutePath + "/Pictures/DiveColorCorrector"
+        val dir = File(filePath)
+        if (!dir.exists()) {
+            dir.mkdirs()
+        }
+        val file = File(dir, "${sanitizeFileName(oldFileName)}_corrected.png")
+        val fOut = file.outputStream()
+        bitmap.compress(Bitmap.CompressFormat.PNG, 90, fOut)
+        fOut.flush()
+        fOut.close()
+    }
+
+    private fun sanitizeFileName(name: String): String {
+        return name.replace("[\\\\/:*?\"<>|]".toRegex(), "_")
     }
 }

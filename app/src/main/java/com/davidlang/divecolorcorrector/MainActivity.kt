@@ -2,7 +2,6 @@ package com.davidlang.divecolorcorrector
 
 import android.app.Activity
 import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -76,7 +75,6 @@ class MainActivity : ComponentActivity() {
                             putExtra(Intent.EXTRA_STREAM, uri)
                         }
                         startActivity(intent)
-                        finish()
                     }
                 }
                 else -> throw Exception("Invalid request code: $requestCode")
