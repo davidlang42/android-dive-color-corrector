@@ -135,7 +135,10 @@ class ImageActivity : ComponentActivity() {
         val parcelFileDescriptor: ParcelFileDescriptor =
             contentResolver.openFileDescriptor(uri, "r") ?: return null
         val fileDescriptor: FileDescriptor = parcelFileDescriptor.fileDescriptor
-        val image: Bitmap = BitmapFactory.decodeFileDescriptor(fileDescriptor)
+        val opts = BitmapFactory.Options().apply {
+            inMutable = true
+        }
+        val image: Bitmap = BitmapFactory.decodeFileDescriptor(fileDescriptor, null, opts)
         parcelFileDescriptor.close()
         return image
     }
