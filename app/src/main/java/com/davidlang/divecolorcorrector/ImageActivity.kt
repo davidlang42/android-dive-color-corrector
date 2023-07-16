@@ -10,7 +10,6 @@ import android.os.Parcelable
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.viewModels
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,19 +23,21 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.davidlang.divecolorcorrector.ui.theme.DiveColorCorrectorTheme
 import java.io.FileDescriptor
 import java.io.IOException
 
-class ImageActivity : ComponentActivity() {
-    private val viewModel: ImageViewModel by viewModels()
 
+class ImageActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (intent?.action != Intent.ACTION_SEND) {
@@ -52,15 +53,14 @@ class ImageActivity : ComponentActivity() {
             Toast.makeText(this, "Intent did not specify image uri", Toast.LENGTH_SHORT).show()
             return
         }
-        viewModel.load(uri, this)
         setContent {
-            MainContent()
+            MainContent(uri)
         }
     }
 
     @Composable
-    fun MainContent() {
-        val bitmap = viewModel.image
+    fun MainContent(uri: Uri) {
+        var bitmap by remember { mutableStateOf<Bitmap?>(null) }
         DiveColorCorrectorTheme {
             Box(
                 contentAlignment = Alignment.BottomCenter
@@ -69,15 +69,20 @@ class ImageActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
                 ) {
-                    if (bitmap == null) {
+                    val image = bitmap
+                    if (image == null) {
                         LoadingContent()
                     } else {
-                        ImageContent(bitmap)
+                        ImageContent(image)
                     }
                 }
                 FooterContent(bitmap != null)
             }
         }
+        Thread {
+            Thread.sleep(1000) // STUB: actually correct the image
+            bitmap = getBitmapFromUri(uri)
+        }.start()
     }
 
     @Composable
@@ -116,5 +121,15 @@ class ImageActivity : ComponentActivity() {
         Box(contentAlignment = Alignment.Center) {
             LinearProgressIndicator()
         }
+    }
+
+    @Throws(IOException::class)
+    private fun getBitmapFromUri(uri: Uri): Bitmap? {
+        val parcelFileDescriptor: ParcelFileDescriptor =
+            contentResolver.openFileDescriptor(uri, "r") ?: return null
+        val fileDescriptor: FileDescriptor = parcelFileDescriptor.fileDescriptor
+        val image: Bitmap = BitmapFactory.decodeFileDescriptor(fileDescriptor)
+        parcelFileDescriptor.close()
+        return image
     }
 }
