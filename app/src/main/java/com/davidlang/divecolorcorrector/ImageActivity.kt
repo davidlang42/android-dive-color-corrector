@@ -3,6 +3,8 @@ package com.davidlang.divecolorcorrector
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.ColorFilter
+import android.graphics.ColorMatrixColorFilter
 import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
@@ -31,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asComposeColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -64,6 +67,7 @@ class ImageActivity : ComponentActivity() {
     @Composable
     fun MainContent(uri: Uri) {
         var bitmap by remember { mutableStateOf<Bitmap?>(null) }
+        var filter: ColorFilter? = null
         DiveColorCorrectorTheme {
             Box(
                 contentAlignment = Alignment.BottomCenter
@@ -76,7 +80,7 @@ class ImageActivity : ComponentActivity() {
                     if (image == null) {
                         LoadingContent()
                     } else {
-                        ImageContent(image)
+                        ImageContent(image, filter!!)
                     }
                 }
                 Row(
@@ -109,17 +113,19 @@ class ImageActivity : ComponentActivity() {
                 Toast.makeText(this, "Image could not be loaded", Toast.LENGTH_SHORT).show()
             } else {
                 val corrector = ColorCorrector(original)
-                corrector.correctColors()
+                //corrector.correctColors()
+                filter = ColorMatrixColorFilter(corrector.calculateFilterMatrix())
                 bitmap = corrector.bitmap
             }
         }.start()
     }
 
     @Composable
-    fun ImageContent(image: ImageBitmap) {
+    fun ImageContent(image: ImageBitmap, filter: ColorFilter) {
         Image(
             bitmap = image,
-            contentDescription = "Color corrected image"
+            contentDescription = "Color corrected image",
+            colorFilter = filter.asComposeColorFilter()
         )
     }
 
