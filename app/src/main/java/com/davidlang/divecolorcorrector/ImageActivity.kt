@@ -29,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -69,7 +70,7 @@ class ImageActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
                 ) {
-                    val image = bitmap
+                    val image = bitmap?.asImageBitmap()
                     if (image == null) {
                         LoadingContent()
                     } else {
@@ -80,8 +81,14 @@ class ImageActivity : ComponentActivity() {
             }
         }
         Thread {
-            Thread.sleep(1000) // STUB: actually correct the image
-            bitmap = getBitmapFromUri(uri)
+            val original = getBitmapFromUri(uri)
+            if (original == null) {
+                Toast.makeText(this, "Image could not be loaded", Toast.LENGTH_SHORT).show()
+            } else {
+                val corrector = ColorCorrector(original)
+                corrector.correctColors()
+                bitmap = corrector.bitmap
+            }
         }.start()
     }
 
@@ -109,9 +116,9 @@ class ImageActivity : ComponentActivity() {
     }
 
     @Composable
-    fun ImageContent(bitmap: Bitmap) {
+    fun ImageContent(image: ImageBitmap) {
         Image(
-            bitmap = bitmap.asImageBitmap(),
+            bitmap = image,
             contentDescription = "Color corrected image"
         )
     }
