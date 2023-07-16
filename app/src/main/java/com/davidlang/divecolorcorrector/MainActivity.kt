@@ -55,7 +55,7 @@ class MainActivity : ComponentActivity() {
     private fun showFilePicker() {
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
-            type = "image/jpeg"
+            type = "image/*"
         }
 
         startActivityForResult(intent, PICK_IMAGE)
