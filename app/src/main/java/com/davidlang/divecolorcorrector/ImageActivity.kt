@@ -158,7 +158,7 @@ class ImageActivity : ComponentActivity() {
             i += 1
         }
         val fOut = file.outputStream()
-        bitmap.compress(Bitmap.CompressFormat.PNG, 90, fOut)
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 95, fOut)
         fOut.flush()
         fOut.close()
         Toast.makeText(this, "Saved as ${file.name}", Toast.LENGTH_SHORT).show()
