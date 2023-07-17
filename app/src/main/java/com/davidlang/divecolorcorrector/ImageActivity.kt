@@ -151,10 +151,10 @@ class ImageActivity : ComponentActivity() {
         val dir = File(filePath)
         if (!dir.exists())
             dir.mkdirs()
-        var file = File(dir, "${originalName}_corrected.png")
+        var file = File(dir, "${originalName}_corrected.jpg")
         var i = 1
         while (file.exists()) {
-            file = File(dir, "${originalName}_corrected ($i).png")
+            file = File(dir, "${originalName}_corrected ($i).jpg")
             i += 1
         }
         val fOut = file.outputStream()
