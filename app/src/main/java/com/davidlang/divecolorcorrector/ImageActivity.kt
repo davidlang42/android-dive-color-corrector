@@ -110,7 +110,7 @@ class ImageActivity : ComponentActivity() {
         Thread {
             val original = getBitmapFromUri(uri)
             if (original == null) {
-                Toast.makeText(this, "Image could not be loaded", Toast.LENGTH_SHORT).show()
+                bitmap = Bitmap.createBitmap(1, 1, Bitmap.Config.ALPHA_8)
             } else {
                 val corrector = ColorCorrector(original)
                 val filter = corrector.underwaterFilter()
