@@ -7,6 +7,7 @@ import android.os.Build
 import androidx.annotation.RequiresApi
 import kotlin.math.PI
 import kotlin.math.cos
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
 class ColorCorrector(var bitmap: Bitmap) {
@@ -39,19 +40,32 @@ class ColorCorrector(var bitmap: Bitmap) {
         }
     }
 
-    fun correctColors() {
-        Thread.sleep(1000) // STUB: actually correct the image
-        invertColors()
-    }
-
-    fun invertColors() {
+    fun applyFilter(filter: ColorMatrix) {
+        val f = filter.array
         for (x in 0 until bitmap.width) {
             for (y in 0 until bitmap.height) {
                 val old = bitmap.getPixel(x, y)
-                val new = Color.argb(Color.alpha(old), 255-Color.red(old), 255-Color.green(old), 255-Color.blue(old))
+                val r = Color.red(old)
+                val g = Color.green(old)
+                val b = Color.blue(old)
+                //val a = Color.alpha(old) // seems to assume alpha is always 255
+                val new = Color.argb(
+                    255,
+                    (r * f[0] + g * f[1] + b * f[2] + f[4] * 255).roundToInt().clip(0, 255),
+                    (g * f[6] + f[9] * 255).roundToInt().clip(0, 255),
+                    (b * f[12] + f[14] * 255).roundToInt().clip(0, 255)
+                )
                 bitmap.setPixel(x, y, new)
             }
         }
+    }
+
+    fun Int.clip(min: Int, max: Int): Int {
+        if (this < min)
+            return min
+        if (this > max)
+            return max
+        return this
     }
 
     fun averageRGB(): DoubleColor {
@@ -70,7 +84,7 @@ class ColorCorrector(var bitmap: Bitmap) {
         return DoubleColor(r/total, g/total, b/total)
     }
 
-    fun calculateFilterMatrix() : ColorMatrix {
+    fun underwaterFilter() : ColorMatrix {
         // Based on algorithm: https://github.com/nikolajbech/underwater-image-color-correction
 
         // Magic values:
