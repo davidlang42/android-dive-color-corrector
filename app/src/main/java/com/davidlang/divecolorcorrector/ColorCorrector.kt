@@ -11,35 +11,6 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 
 class ColorCorrector(var bitmap: Bitmap) {
-    data class DoubleColor(val r: Double, val g: Double, val b: Double) {
-        fun sum(): Double {
-            return r + g + b
-        }
-    }
-    data class IntColor(val r: Int, val g: Int, val b: Int) {
-        constructor(rgb: Int) : this(Color.red(rgb), Color.green(rgb), Color.blue(rgb))
-
-        fun sum(): Int {
-            return r + g + b
-        }
-    }
-    data class Interval(val low: Int, val high: Int) {
-        fun diff(): Int {
-            return high - low
-        }
-    }
-    data class Histogram(val from: Int, val to: Int) {
-        private val counts = IntArray(to-from+1)
-
-        fun get(value: Int): Int {
-            return counts[value - from]
-        }
-
-        fun increment(value: Int) {
-            counts[value - from] += 1
-        }
-    }
-
     fun applyFilter(filter: ColorMatrix) {
         val f = filter.array
         for (x in 0 until bitmap.width) {
