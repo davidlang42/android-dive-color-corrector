@@ -3,14 +3,12 @@ package com.davidlang.divecolorcorrector
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.ColorFilter
-import android.graphics.ColorMatrix
-import android.graphics.ColorMatrixColorFilter
 import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
 import android.os.ParcelFileDescriptor
 import android.os.Parcelable
+import android.provider.OpenableColumns
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -34,7 +32,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asComposeColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -149,17 +146,41 @@ class ImageActivity : ComponentActivity() {
     }
 
     private fun saveBitmap(bitmap: Bitmap, originalUri: Uri) {
-        val oldFileName = originalUri.lastPathSegment ?: "unknown"
+        val originalName = removeExtension(sanitizeFileName(getFileName(originalUri)))
         val filePath = Environment.getExternalStorageDirectory().absolutePath + "/Pictures/DiveColorCorrector"
         val dir = File(filePath)
-        if (!dir.exists()) {
+        if (!dir.exists())
             dir.mkdirs()
+        var file = File(dir, "${originalName}_corrected.png")
+        var i = 1
+        while (file.exists()) {
+            file = File(dir, "${originalName}_corrected ($i).png")
+            i += 1
         }
-        val file = File(dir, "${sanitizeFileName(oldFileName)}_corrected.png")
         val fOut = file.outputStream()
         bitmap.compress(Bitmap.CompressFormat.PNG, 90, fOut)
         fOut.flush()
         fOut.close()
+        Toast.makeText(this, "Saved as ${file.name}", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun removeExtension(fileName: String): String {
+        val parts = fileName.split(".")
+        return if (parts.size < 2)
+            fileName
+        else
+            parts.slice(0 until (parts.size - 1)).joinToString(".")
+    }
+
+    private fun getFileName(uri: Uri): String {
+        val cursor = contentResolver.query(uri, null, null, null, null)
+        if (cursor != null) {
+            cursor.moveToFirst()
+            val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            return cursor.getString(nameIndex)
+        } else {
+            return uri.lastPathSegment ?: "unknown"
+        }
     }
 
     private fun sanitizeFileName(name: String): String {
