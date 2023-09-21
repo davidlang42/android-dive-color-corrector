@@ -143,6 +143,7 @@ class ImageActivity : ComponentActivity() {
     }
 
     private fun saveBitmap(bitmap: Bitmap, exifData: Map<String, String>, originalUri: Uri) {
+        // Determine file name
         val originalName = removeExtension(sanitizeFileName(getFileName(originalUri)))
         val filePath = Environment.getExternalStorageDirectory().absolutePath + "/Pictures/DiveColorCorrector"
         val dir = File(filePath)
@@ -154,11 +155,18 @@ class ImageActivity : ComponentActivity() {
             file = File(dir, "${originalName}_corrected ($i).jpg")
             i += 1
         }
+        // Save bitmap as JPEG
         val fOut = file.outputStream()
         bitmap.compress(Bitmap.CompressFormat.JPEG, 95, fOut)
-        //TODO save exif data
         fOut.flush()
         fOut.close()
+        // Add EXIF data
+        val exifInterface = ExifInterface(file)
+        for ((tag, value) in exifData) {
+            exifInterface.setAttribute(tag, value)
+        }
+        exifInterface.saveAttributes()
+        // Tell the user we're awesome
         Toast.makeText(this, "Saved as ${file.name}", Toast.LENGTH_SHORT).show()
     }
 
@@ -177,7 +185,7 @@ class ImageActivity : ComponentActivity() {
         private fun readExifData(fileDescriptor: FileDescriptor): Map<String, String> {
             val data = mutableMapOf<String, String>()
             val exifReader = ExifInterface(fileDescriptor)
-            for (tag in exifTagsToCopy) {
+            for (tag in ExifTags.allTags) {
                 val value = exifReader.getAttribute(tag)
                 if (value != null) {
                     data[tag] = value
@@ -197,10 +205,5 @@ class ImageActivity : ComponentActivity() {
         private fun sanitizeFileName(name: String): String {
             return name.replace("[\\\\/:*?\"<>|]".toRegex(), "_")
         }
-
-        private val exifTagsToCopy: Array<String> = arrayOf(
-            ExifInterface.TAG_PHOTOGRAPHIC_SENSITIVITY,
-            ExifInterface.TAG_MAKE
-        ) //TODO add other exif tags
     }
 }
