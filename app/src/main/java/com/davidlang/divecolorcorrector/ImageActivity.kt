@@ -31,10 +31,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.exifinterface.media.ExifInterface
 import com.davidlang.divecolorcorrector.ui.theme.DiveColorCorrectorTheme
 import java.io.File
 import java.io.FileDescriptor
@@ -64,7 +67,11 @@ class ImageActivity : ComponentActivity() {
 
     @Composable
     fun MainContent(uri: Uri) {
-        var bitmap by remember { mutableStateOf<Bitmap?>(null) }
+        var originalBitmap by remember { mutableStateOf<Bitmap?>(null) }
+        var renderedBitmap by remember { mutableStateOf<Bitmap?>(null) }
+        var exifData by remember { mutableStateOf<Map<String, String>?>(null) }
+        var filter by remember { mutableStateOf<ColorMatrix?>(null) }
+        var progress by remember { mutableStateOf(0f) }
         DiveColorCorrectorTheme {
             Box(
                 contentAlignment = Alignment.BottomCenter
@@ -73,11 +80,10 @@ class ImageActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
                 ) {
-                    val image = bitmap?.asImageBitmap()
-                    if (image == null) {
-                        LoadingContent()
+                    if (originalBitmap != null && filter != null) {
+                        ImageContent(originalBitmap!!.asImageBitmap(), ColorFilter.colorMatrix(filter!!))
                     } else {
-                        ImageContent(image)
+                        LoadingContent(progress)
                     }
                 }
                 Row(
@@ -90,10 +96,10 @@ class ImageActivity : ComponentActivity() {
                     ) {
                         Text("Cancel", fontSize = 20.sp)
                     }
-                    if (bitmap != null) {
+                    if (renderedBitmap != null) { //TODO  && exifData != null
                         Button(
                             onClick = {
-                                saveBitmap(bitmap!!, uri)
+                                saveBitmap(renderedBitmap!!, uri) //TODO exifData!!
                                 finish()
                             },
                             modifier = Modifier.padding(10.dp),
@@ -105,44 +111,49 @@ class ImageActivity : ComponentActivity() {
             }
         }
         Thread {
-            val original = getBitmapFromUri(uri)
-            if (original == null) {
-                bitmap = Bitmap.createBitmap(1, 1, Bitmap.Config.ALPHA_8)
-            } else {
-                val corrector = ColorCorrector(original)
-                val filter = corrector.underwaterFilter()
-                corrector.applyFilter(filter)
-                bitmap = corrector.bitmap
+            val parcel = contentResolver.openFileDescriptor(uri, "r")
+            if (parcel != null) {
+                originalBitmap = BitmapFactory.decodeFileDescriptor(parcel.fileDescriptor)
+                progress = 0.1f
+                exifData = readExifData(parcel.fileDescriptor)
+                parcel.close()
+                progress = 0.2f
+                val corrector = ColorCorrector(originalBitmap!!)
+                filter = corrector.underwaterFilter()//TODO progress during analysis
+                progress = 0.8f
+                renderedBitmap = corrector.applyFilter(filter!!)//TODO progress during rendering
+                progress = 1f
             }
         }.start()
     }
 
     @Composable
-    fun ImageContent(image: ImageBitmap) {
+    fun ImageContent(image: ImageBitmap, filter: ColorFilter) {
         Image(
             bitmap = image,
-            contentDescription = "Color corrected image"
+            contentDescription = "Color corrected image",
+            colorFilter = filter
         )
     }
 
     @Composable
-    fun LoadingContent() {
+    fun LoadingContent(progress: Float) {
         Box(contentAlignment = Alignment.Center) {
-            LinearProgressIndicator()
+            LinearProgressIndicator(progress)
         }
     }
 
-    @Throws(IOException::class)
-    private fun getBitmapFromUri(uri: Uri): Bitmap? {
-        val parcelFileDescriptor: ParcelFileDescriptor =
-            contentResolver.openFileDescriptor(uri, "r") ?: return null
-        val fileDescriptor: FileDescriptor = parcelFileDescriptor.fileDescriptor
-        val opts = BitmapFactory.Options().apply {
-            inMutable = true
+    private fun readExifData(fileDescriptor: FileDescriptor): Map<String, String> {
+        val data = mutableMapOf<String, String>()
+        val exifReader = ExifInterface(fileDescriptor)
+        val tagsToCopy: Array<String> = arrayOf(ExifInterface.TAG_PHOTOGRAPHIC_SENSITIVITY, ExifInterface.TAG_MAKE) //TODO static
+        for (tag in tagsToCopy) {
+            val value = exifReader.getAttribute(tag)
+            if (value != null) {
+                data[tag] = value
+            }
         }
-        val image: Bitmap = BitmapFactory.decodeFileDescriptor(fileDescriptor, null, opts)
-        parcelFileDescriptor.close()
-        return image
+        return data.toMap()
     }
 
     private fun saveBitmap(bitmap: Bitmap, originalUri: Uri) {

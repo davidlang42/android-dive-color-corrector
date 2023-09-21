@@ -2,7 +2,7 @@ package com.davidlang.divecolorcorrector
 
 import android.graphics.Bitmap
 import android.graphics.Color
-import android.graphics.ColorMatrix
+import androidx.compose.ui.graphics.ColorMatrix
 import android.os.Build
 import androidx.annotation.RequiresApi
 import kotlin.math.PI
@@ -11,8 +11,9 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 
 class ColorCorrector(var bitmap: Bitmap) {
-    fun applyFilter(filter: ColorMatrix) {
-        val f = filter.array
+    fun applyFilter(filter: ColorMatrix): Bitmap {
+        val newBitmap = Bitmap.createBitmap(bitmap.width, bitmap.height, bitmap.config)
+        val f = filter.values
         for (x in 0 until bitmap.width) {
             for (y in 0 until bitmap.height) {
                 val old = bitmap.getPixel(x, y)
@@ -26,9 +27,10 @@ class ColorCorrector(var bitmap: Bitmap) {
                     (g * f[6] + f[9] * 255).roundToInt().clip(0, 255),
                     (b * f[12] + f[14] * 255).roundToInt().clip(0, 255)
                 )
-                bitmap.setPixel(x, y, new)
+                newBitmap.setPixel(x, y, new)
             }
         }
+        return newBitmap
     }
 
     fun Int.clip(min: Int, max: Int): Int {
