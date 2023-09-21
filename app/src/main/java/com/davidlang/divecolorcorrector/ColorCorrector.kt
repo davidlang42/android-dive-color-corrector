@@ -16,9 +16,9 @@ import kotlin.math.sin
 class ColorCorrector(var bitmap: Bitmap) {
     var progressCallback: (Float) -> Unit = { }
 
-    private val progressUpdateEvery = 1000000 // update every megapixel
-    private val progressInAverageRGB = 0.4f
-    private val progressInCreateHistograms = 0.55f // leave a gap so we don't send 1f until actually complete
+    private val progressUpdateEvery = 100000 // pixels
+    private val progressInAverageRGB = 0.2f
+    private val progressInCreateHistograms = 0.75f // leave a gap so we don't send 1f until actually complete
 
     fun applyFilter(filter: ColorMatrix): Bitmap {
         val paint = Paint().apply { colorFilter = ColorMatrixColorFilter(filter.values) }
@@ -62,24 +62,26 @@ class ColorCorrector(var bitmap: Bitmap) {
         val histR = Histogram(0, 255)
         val histG = Histogram(0, 255)
         val histB = Histogram(0, 255)
-        val progressPerX = progressInCreateHistograms / bitmap.width
-        for (x in 0 until bitmap.width) {
-            progressCallback(progressInAverageRGB + x * progressPerX)
-            for (y in 0 until bitmap.height) {
-                val pixel = bitmap.getPixel(x, y)
-                val color = IntColor(pixel)
-
-                var shiftedR = hueShiftRed(color, hueShift).sum() // Use new calculated red value
-                if (shiftedR > 255) {
-                    shiftedR = 255
-                } else if (shiftedR < 0) { //TODO is this really possible
-                    shiftedR = 0
-                }
-
-                histR.increment(shiftedR)
-                histG.increment(color.g)
-                histB.increment(color.b)
+        val pixels = IntArray(bitmap.width * bitmap.height)
+        bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+        val progressPerPixel = progressInCreateHistograms / pixels.size
+        for (i in pixels.indices) {
+            if (i % progressUpdateEvery == 0) {
+                progressCallback(progressInAverageRGB + i * progressPerPixel)
             }
+
+            val color = IntColor(pixels[i])
+
+            var shiftedR = hueShiftRed(color, hueShift).sum() // Use new calculated red value
+            if (shiftedR > 255) {
+                shiftedR = 255
+            } else if (shiftedR < 0) { //TODO is this really possible
+                shiftedR = 0
+            }
+
+            histR.increment(shiftedR)
+            histG.increment(color.g)
+            histB.increment(color.b)
         }
         progressCallback(progressInAverageRGB + progressInCreateHistograms)
         return Triple(histR, histG, histB)
@@ -109,7 +111,7 @@ class ColorCorrector(var bitmap: Bitmap) {
             if (hueShift > maxHueShift) newAvgRed = 60.0 // Max value
         }
 
-        // Create histogram with new red values: (~6s)
+        // Create histogram with new red values:
         val (histR, histG, histB) = createHistograms(hueShift);
 
         // Normalise values:
