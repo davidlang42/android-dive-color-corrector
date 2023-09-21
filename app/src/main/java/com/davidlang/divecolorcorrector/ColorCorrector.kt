@@ -27,10 +27,10 @@ class ColorCorrector(bitmap: Bitmap) {
     private val progressInCreateHistograms = 0.75f // leave a gap so we don't send 1f until actually complete
 
     fun Int.clip(min: Int, max: Int): Int {
-        if (this < min)
-            return min
         if (this > max)
             return max
+        if (this < min)
+            return min
         return this
     }
 
@@ -63,16 +63,8 @@ class ColorCorrector(bitmap: Bitmap) {
             if (i % progressUpdateEvery == 0) {
                 progressCallback(progressInAverageRGB + i * progressPerPixel)
             }
-
             val color = IntColor(originalPixels[i])
-
-            var shiftedR = hueShiftRed(color, hueShift).sum() // Use new calculated red value
-            if (shiftedR > 255) {
-                shiftedR = 255
-            } else if (shiftedR < 0) { //TODO is this really possible
-                shiftedR = 0
-            }
-
+            var shiftedR = hueShiftRed(color, hueShift).sum().clip(0, 255) // Use new calculated red value
             histR.increment(shiftedR)
             histG.increment(color.g)
             histB.increment(color.b)
