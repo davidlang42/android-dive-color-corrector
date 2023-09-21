@@ -31,15 +31,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.exifinterface.media.ExifInterface
 import com.davidlang.divecolorcorrector.ui.theme.DiveColorCorrectorTheme
 import java.io.File
 import java.io.FileDescriptor
-import java.io.IOException
-
 
 class ImageActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -64,7 +65,11 @@ class ImageActivity : ComponentActivity() {
 
     @Composable
     fun MainContent(uri: Uri) {
-        var bitmap by remember { mutableStateOf<Bitmap?>(null) }
+        var originalBitmap by remember { mutableStateOf<Bitmap?>(null) }
+        var renderedBitmap by remember { mutableStateOf<Bitmap?>(null) }
+        var exifData by remember { mutableStateOf<Map<String, String>?>(null) }
+        var filter by remember { mutableStateOf<ColorMatrix?>(null) }
+        var progress by remember { mutableStateOf(0f) }
         DiveColorCorrectorTheme {
             Box(
                 contentAlignment = Alignment.BottomCenter
@@ -73,11 +78,14 @@ class ImageActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
                 ) {
-                    val image = bitmap?.asImageBitmap()
-                    if (image == null) {
-                        LoadingContent()
-                    } else {
-                        ImageContent(image)
+                    if (originalBitmap != null) {
+                        ImageContent(
+                            originalBitmap!!.asImageBitmap(),
+                            ColorFilter.colorMatrix(filter ?: ColorMatrix().apply { setToSaturation(0f)}) // default to Black & White
+                        )
+                    }
+                    if (progress < 1f) {
+                        LoadingContent(progress)
                     }
                 }
                 Row(
@@ -90,10 +98,10 @@ class ImageActivity : ComponentActivity() {
                     ) {
                         Text("Cancel", fontSize = 20.sp)
                     }
-                    if (bitmap != null) {
+                    if (renderedBitmap != null && exifData != null) {
                         Button(
                             onClick = {
-                                saveBitmap(bitmap!!, uri)
+                                saveBitmap(renderedBitmap!!, exifData!!, uri)
                                 finish()
                             },
                             modifier = Modifier.padding(10.dp),
@@ -105,47 +113,37 @@ class ImageActivity : ComponentActivity() {
             }
         }
         Thread {
-            val original = getBitmapFromUri(uri)
-            if (original == null) {
-                bitmap = Bitmap.createBitmap(1, 1, Bitmap.Config.ALPHA_8)
-            } else {
-                val corrector = ColorCorrector(original)
-                val filter = corrector.underwaterFilter()
-                corrector.applyFilter(filter)
-                bitmap = corrector.bitmap
+            val parcel = contentResolver.openFileDescriptor(uri, "r")
+            if (parcel != null) {
+                originalBitmap = BitmapFactory.decodeFileDescriptor(parcel.fileDescriptor)
+                exifData = readExifData(parcel.fileDescriptor)
+                parcel.close()
+                val corrector = ColorCorrector(originalBitmap!!)
+                corrector.progressCallback = { f -> progress = f }
+                filter = corrector.underwaterFilter()
+                renderedBitmap = corrector.applyFilter(filter!!)
             }
         }.start()
     }
 
     @Composable
-    fun ImageContent(image: ImageBitmap) {
+    fun ImageContent(image: ImageBitmap, filter: ColorFilter) {
         Image(
             bitmap = image,
-            contentDescription = "Color corrected image"
+            contentDescription = "Color corrected image",
+            colorFilter = filter
         )
     }
 
     @Composable
-    fun LoadingContent() {
+    fun LoadingContent(progress: Float) {
         Box(contentAlignment = Alignment.Center) {
-            LinearProgressIndicator()
+            LinearProgressIndicator(progress)
         }
     }
 
-    @Throws(IOException::class)
-    private fun getBitmapFromUri(uri: Uri): Bitmap? {
-        val parcelFileDescriptor: ParcelFileDescriptor =
-            contentResolver.openFileDescriptor(uri, "r") ?: return null
-        val fileDescriptor: FileDescriptor = parcelFileDescriptor.fileDescriptor
-        val opts = BitmapFactory.Options().apply {
-            inMutable = true
-        }
-        val image: Bitmap = BitmapFactory.decodeFileDescriptor(fileDescriptor, null, opts)
-        parcelFileDescriptor.close()
-        return image
-    }
-
-    private fun saveBitmap(bitmap: Bitmap, originalUri: Uri) {
+    private fun saveBitmap(bitmap: Bitmap, exifData: Map<String, String>, originalUri: Uri) {
+        // Determine file name
         val originalName = removeExtension(sanitizeFileName(getFileName(originalUri)))
         val filePath = Environment.getExternalStorageDirectory().absolutePath + "/Pictures/DiveColorCorrector"
         val dir = File(filePath)
@@ -157,19 +155,19 @@ class ImageActivity : ComponentActivity() {
             file = File(dir, "${originalName}_corrected ($i).jpg")
             i += 1
         }
+        // Save bitmap as JPEG
         val fOut = file.outputStream()
         bitmap.compress(Bitmap.CompressFormat.JPEG, 95, fOut)
         fOut.flush()
         fOut.close()
+        // Add EXIF data
+        val exifInterface = ExifInterface(file)
+        for ((tag, value) in exifData) {
+            exifInterface.setAttribute(tag, value)
+        }
+        exifInterface.saveAttributes()
+        // Tell the user we're awesome
         Toast.makeText(this, "Saved as ${file.name}", Toast.LENGTH_SHORT).show()
-    }
-
-    private fun removeExtension(fileName: String): String {
-        val parts = fileName.split(".")
-        return if (parts.size < 2)
-            fileName
-        else
-            parts.slice(0 until (parts.size - 1)).joinToString(".")
     }
 
     private fun getFileName(uri: Uri): String {
@@ -183,7 +181,29 @@ class ImageActivity : ComponentActivity() {
         }
     }
 
-    private fun sanitizeFileName(name: String): String {
-        return name.replace("[\\\\/:*?\"<>|]".toRegex(), "_")
+    companion object {
+        private fun readExifData(fileDescriptor: FileDescriptor): Map<String, String> {
+            val data = mutableMapOf<String, String>()
+            val exifReader = ExifInterface(fileDescriptor)
+            for (tag in ExifTags.allTags) {
+                val value = exifReader.getAttribute(tag)
+                if (value != null && value != "") { // empty strings can break GPS exif data
+                    data[tag] = value
+                }
+            }
+            return data.toMap()
+        }
+
+        private fun removeExtension(fileName: String): String {
+            val parts = fileName.split(".")
+            return if (parts.size < 2)
+                fileName
+            else
+                parts.slice(0 until (parts.size - 1)).joinToString(".")
+        }
+
+        private fun sanitizeFileName(name: String): String {
+            return name.replace("[\\\\/:*?\"<>|]".toRegex(), "_")
+        }
     }
 }
