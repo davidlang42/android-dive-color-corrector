@@ -187,7 +187,7 @@ class ImageActivity : ComponentActivity() {
             val exifReader = ExifInterface(fileDescriptor)
             for (tag in ExifTags.allTags) {
                 val value = exifReader.getAttribute(tag)
-                if (value != null) {
+                if (value != null && value != "") { // empty strings can break GPS exif data
                     data[tag] = value
                 }
             }
