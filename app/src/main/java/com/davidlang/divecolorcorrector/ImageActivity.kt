@@ -41,8 +41,6 @@ import androidx.exifinterface.media.ExifInterface
 import com.davidlang.divecolorcorrector.ui.theme.DiveColorCorrectorTheme
 import java.io.File
 import java.io.FileDescriptor
-import java.io.IOException
-
 
 class ImageActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -80,9 +78,13 @@ class ImageActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
                 ) {
-                    if (originalBitmap != null && filter != null) {
-                        ImageContent(originalBitmap!!.asImageBitmap(), ColorFilter.colorMatrix(filter!!))
-                    } else {
+                    if (originalBitmap != null) {
+                        ImageContent(
+                            originalBitmap!!.asImageBitmap(),
+                            ColorFilter.colorMatrix(filter ?: ColorMatrix().apply { setToSaturation(0f)}) // default to Black & White
+                        )
+                    }
+                    if (progress < 1f) {
                         LoadingContent(progress)
                     }
                 }
@@ -96,10 +98,10 @@ class ImageActivity : ComponentActivity() {
                     ) {
                         Text("Cancel", fontSize = 20.sp)
                     }
-                    if (renderedBitmap != null) { //TODO  && exifData != null
+                    if (renderedBitmap != null && exifData != null) {
                         Button(
                             onClick = {
-                                saveBitmap(renderedBitmap!!, uri) //TODO exifData!!
+                                saveBitmap(renderedBitmap!!, exifData!!, uri)
                                 finish()
                             },
                             modifier = Modifier.padding(10.dp),
@@ -143,20 +145,7 @@ class ImageActivity : ComponentActivity() {
         }
     }
 
-    private fun readExifData(fileDescriptor: FileDescriptor): Map<String, String> {
-        val data = mutableMapOf<String, String>()
-        val exifReader = ExifInterface(fileDescriptor)
-        val tagsToCopy: Array<String> = arrayOf(ExifInterface.TAG_PHOTOGRAPHIC_SENSITIVITY, ExifInterface.TAG_MAKE) //TODO static
-        for (tag in tagsToCopy) {
-            val value = exifReader.getAttribute(tag)
-            if (value != null) {
-                data[tag] = value
-            }
-        }
-        return data.toMap()
-    }
-
-    private fun saveBitmap(bitmap: Bitmap, originalUri: Uri) {
+    private fun saveBitmap(bitmap: Bitmap, exifData: Map<String, String>, originalUri: Uri) {
         val originalName = removeExtension(sanitizeFileName(getFileName(originalUri)))
         val filePath = Environment.getExternalStorageDirectory().absolutePath + "/Pictures/DiveColorCorrector"
         val dir = File(filePath)
@@ -170,17 +159,10 @@ class ImageActivity : ComponentActivity() {
         }
         val fOut = file.outputStream()
         bitmap.compress(Bitmap.CompressFormat.JPEG, 95, fOut)
+        //TODO save exif data
         fOut.flush()
         fOut.close()
         Toast.makeText(this, "Saved as ${file.name}", Toast.LENGTH_SHORT).show()
-    }
-
-    private fun removeExtension(fileName: String): String {
-        val parts = fileName.split(".")
-        return if (parts.size < 2)
-            fileName
-        else
-            parts.slice(0 until (parts.size - 1)).joinToString(".")
     }
 
     private fun getFileName(uri: Uri): String {
@@ -194,7 +176,34 @@ class ImageActivity : ComponentActivity() {
         }
     }
 
-    private fun sanitizeFileName(name: String): String {
-        return name.replace("[\\\\/:*?\"<>|]".toRegex(), "_")
+    companion object {
+        private fun readExifData(fileDescriptor: FileDescriptor): Map<String, String> {
+            val data = mutableMapOf<String, String>()
+            val exifReader = ExifInterface(fileDescriptor)
+            for (tag in exifTagsToCopy) {
+                val value = exifReader.getAttribute(tag)
+                if (value != null) {
+                    data[tag] = value
+                }
+            }
+            return data.toMap()
+        }
+
+        private fun removeExtension(fileName: String): String {
+            val parts = fileName.split(".")
+            return if (parts.size < 2)
+                fileName
+            else
+                parts.slice(0 until (parts.size - 1)).joinToString(".")
+        }
+
+        private fun sanitizeFileName(name: String): String {
+            return name.replace("[\\\\/:*?\"<>|]".toRegex(), "_")
+        }
+
+        private val exifTagsToCopy: Array<String> = arrayOf(
+            ExifInterface.TAG_PHOTOGRAPHIC_SENSITIVITY,
+            ExifInterface.TAG_MAKE
+        ) //TODO add others
     }
 }
