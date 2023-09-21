@@ -78,7 +78,9 @@ class ImageActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
                 ) {
-                    if (originalBitmap != null) {
+                    if (renderedBitmap != null) {
+                        ImageContent(renderedBitmap!!.asImageBitmap())
+                    } else if (originalBitmap != null) {
                         ImageContent(
                             originalBitmap!!.asImageBitmap(),
                             ColorFilter.colorMatrix(filter ?: ColorMatrix().apply { setToSaturation(0f)}) // default to Black & White
@@ -127,7 +129,7 @@ class ImageActivity : ComponentActivity() {
     }
 
     @Composable
-    fun ImageContent(image: ImageBitmap, filter: ColorFilter) {
+    fun ImageContent(image: ImageBitmap, filter: ColorFilter? = null) {
         Image(
             bitmap = image,
             contentDescription = "Color corrected image",

@@ -1,14 +1,17 @@
 package com.davidlang.divecolorcorrector
 
+
 import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.ColorMatrixColorFilter
+import android.graphics.Paint
 import androidx.compose.ui.graphics.ColorMatrix
-import android.os.Build
-import androidx.annotation.RequiresApi
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
+
 
 class ColorCorrector(var bitmap: Bitmap) {
     var progressCallback: (Float) -> Unit = { }
@@ -17,28 +20,10 @@ class ColorCorrector(var bitmap: Bitmap) {
     private val progressInCreateHistograms = 0.55f // leave a gap so we don't send 1f until actually complete
 
     fun applyFilter(filter: ColorMatrix): Bitmap {
-        progressCallback(0f)
+        val paint = Paint().apply { colorFilter = ColorMatrixColorFilter(filter.values) }
         val newBitmap = Bitmap.createBitmap(bitmap.width, bitmap.height, bitmap.config)
-        val f = filter.values
-        val progressPerX = 1f / bitmap.width
-        for (x in 0 until bitmap.width) {
-            progressCallback(x * progressPerX)
-            for (y in 0 until bitmap.height) {
-                val old = bitmap.getPixel(x, y)
-                val r = Color.red(old)
-                val g = Color.green(old)
-                val b = Color.blue(old)
-                //val a = Color.alpha(old) // seems to assume alpha is always 255
-                val new = Color.argb(
-                    255,
-                    (r * f[0] + g * f[1] + b * f[2] + f[4] * 255).roundToInt().clip(0, 255),
-                    (g * f[6] + f[9] * 255).roundToInt().clip(0, 255),
-                    (b * f[12] + f[14] * 255).roundToInt().clip(0, 255)
-                )
-                newBitmap.setPixel(x, y, new)
-            }
-        }
-        progressCallback(1f)
+        val canvas = Canvas(newBitmap)
+        canvas.drawBitmap(bitmap, 0f, 0f, paint)
         return newBitmap
     }
 
