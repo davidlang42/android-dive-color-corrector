@@ -116,15 +116,12 @@ class ImageActivity : ComponentActivity() {
             val parcel = contentResolver.openFileDescriptor(uri, "r")
             if (parcel != null) {
                 originalBitmap = BitmapFactory.decodeFileDescriptor(parcel.fileDescriptor)
-                progress = 0.1f
                 exifData = readExifData(parcel.fileDescriptor)
                 parcel.close()
-                progress = 0.2f
                 val corrector = ColorCorrector(originalBitmap!!)
-                filter = corrector.underwaterFilter()//TODO progress during analysis
-                progress = 0.8f
-                renderedBitmap = corrector.applyFilter(filter!!)//TODO progress during rendering
-                progress = 1f
+                corrector.progressCallback = { f -> progress = f }
+                filter = corrector.underwaterFilter()
+                renderedBitmap = corrector.applyFilter(filter!!)
             }
         }.start()
     }
@@ -204,6 +201,6 @@ class ImageActivity : ComponentActivity() {
         private val exifTagsToCopy: Array<String> = arrayOf(
             ExifInterface.TAG_PHOTOGRAPHIC_SENSITIVITY,
             ExifInterface.TAG_MAKE
-        ) //TODO add others
+        ) //TODO add other exif tags
     }
 }

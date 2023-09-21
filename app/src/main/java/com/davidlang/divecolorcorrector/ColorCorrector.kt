@@ -11,10 +11,18 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 
 class ColorCorrector(var bitmap: Bitmap) {
+    var progressCallback: (Float) -> Unit = { }
+
+    private val progressInAverageRGB = 0.4f
+    private val progressInCreateHistograms = 0.55f // leave a gap so we don't send 1f until actually complete
+
     fun applyFilter(filter: ColorMatrix): Bitmap {
+        progressCallback(0f)
         val newBitmap = Bitmap.createBitmap(bitmap.width, bitmap.height, bitmap.config)
         val f = filter.values
+        val progressPerX = 1f / bitmap.width
         for (x in 0 until bitmap.width) {
+            progressCallback(x * progressPerX)
             for (y in 0 until bitmap.height) {
                 val old = bitmap.getPixel(x, y)
                 val r = Color.red(old)
@@ -30,6 +38,7 @@ class ColorCorrector(var bitmap: Bitmap) {
                 newBitmap.setPixel(x, y, new)
             }
         }
+        progressCallback(1f)
         return newBitmap
     }
 
@@ -45,7 +54,9 @@ class ColorCorrector(var bitmap: Bitmap) {
         var r = 0
         var g = 0
         var b = 0
+        val progressPerX = progressInAverageRGB / bitmap.width
         for (x in 0 until bitmap.width) {
+            progressCallback(x * progressPerX)
             for (y in 0 until bitmap.height) {
                 val color = bitmap.getPixel(x, y)
                 r += Color.red(color)
@@ -54,37 +65,18 @@ class ColorCorrector(var bitmap: Bitmap) {
             }
         }
         val total = (bitmap.width * bitmap.height).toDouble()
-        return DoubleColor(r/total, g/total, b/total)
+        val average = DoubleColor(r/total, g/total, b/total)
+        progressCallback(progressInAverageRGB)
+        return average
     }
 
-    fun underwaterFilter() : ColorMatrix {
-        // Based on algorithm: https://github.com/nikolajbech/underwater-image-color-correction
-
-        // Magic values:
-        val numOfPixels = bitmap.width * bitmap.height
-        val thresholdRatio = 2000
-        val thresholdLevel = numOfPixels / thresholdRatio
-        val minAvgRed: Double = 60.0
-        val maxHueShift: Int = 120
-        val blueMagicValue: Float = 1.2f
-
-        // Calculate average color:
-        val avg = averageRGB()
-
-        // Calculate shift amount:
-        var hueShift = 0
-        var newAvgRed = avg.r
-        while (newAvgRed < minAvgRed) {
-            newAvgRed = hueShiftRed(avg, hueShift).sum()
-            hueShift++
-            if (hueShift > maxHueShift) newAvgRed = 60.0 // Max value
-        }
-
-        // Create histogram with new red values:
+    fun createHistograms(hueShift: Int) : Triple<Histogram, Histogram, Histogram> {
         val histR = Histogram(0, 255)
         val histG = Histogram(0, 255)
         val histB = Histogram(0, 255)
+        val progressPerX = progressInCreateHistograms / bitmap.width
         for (x in 0 until bitmap.width) {
+            progressCallback(progressInAverageRGB + x * progressPerX)
             for (y in 0 until bitmap.height) {
                 val pixel = bitmap.getPixel(x, y)
                 val color = IntColor(pixel)
@@ -101,6 +93,36 @@ class ColorCorrector(var bitmap: Bitmap) {
                 histB.increment(color.b)
             }
         }
+        progressCallback(progressInAverageRGB + progressInCreateHistograms)
+        return Triple(histR, histG, histB)
+    }
+
+    fun underwaterFilter() : ColorMatrix {
+        progressCallback(0f)
+        // Based on algorithm: https://github.com/nikolajbech/underwater-image-color-correction
+
+        // Magic values:
+        val numOfPixels = bitmap.width * bitmap.height
+        val thresholdRatio = 2000
+        val thresholdLevel = numOfPixels / thresholdRatio
+        val minAvgRed: Double = 60.0
+        val maxHueShift: Int = 120
+        val blueMagicValue: Float = 1.2f
+
+        // Calculate average color: (~4s)
+        val avg = averageRGB()
+
+        // Calculate shift amount:
+        var hueShift = 0
+        var newAvgRed = avg.r
+        while (newAvgRed < minAvgRed) {
+            newAvgRed = hueShiftRed(avg, hueShift).sum()
+            hueShift++
+            if (hueShift > maxHueShift) newAvgRed = 60.0 // Max value
+        }
+
+        // Create histogram with new red values: (~6s)
+        val (histR, histG, histB) = createHistograms(hueShift);
 
         // Normalise values:
         val adjustR = normalizingInterval(histR, thresholdLevel)
@@ -123,12 +145,15 @@ class ColorCorrector(var bitmap: Bitmap) {
         val modifiedRedGreen = shifted.g.toFloat() * redGain
         val modifiedRedBlue = shifted.b.toFloat() * redGain * blueMagicValue
 
-        return ColorMatrix(floatArrayOf(
+        val matrix = ColorMatrix(floatArrayOf(
             modifiedRed, modifiedRedGreen, modifiedRedBlue, 0f, redOffset,
             0f, greenGain, 0f, 0f, greenOffset,
             0f, 0f, blueGain, 0f, blueOffset,
             0f, 0f, 0f, 1f, 0f
-        ))
+        ));
+
+        progressCallback(1f)
+        return matrix
     }
 
     companion object {
