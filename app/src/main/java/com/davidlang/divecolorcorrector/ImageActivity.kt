@@ -83,7 +83,7 @@ class ImageActivity : ComponentActivity() {
                     } else if (originalBitmap != null) {
                         ImageContent(
                             originalBitmap!!.asImageBitmap(),
-                            ColorFilter.colorMatrix(filter ?: ColorMatrix().apply { setToSaturation(0f)}) // default to Black & White
+                            filter?.asColorFilter()
                         )
                     }
                     if (progress < 1f) {
@@ -181,6 +181,10 @@ class ImageActivity : ComponentActivity() {
         } else {
             return uri.lastPathSegment ?: "unknown"
         }
+    }
+
+    private fun ColorMatrix.asColorFilter(): ColorFilter? {
+        return ColorFilter.colorMatrix(this)
     }
 
     companion object {
