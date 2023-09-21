@@ -1,52 +1,36 @@
 package com.davidlang.divecolorcorrector
 
+
 import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.ColorMatrixColorFilter
+import android.graphics.Paint
 import androidx.compose.ui.graphics.ColorMatrix
-import android.os.Build
-import androidx.annotation.RequiresApi
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
-class ColorCorrector(var bitmap: Bitmap) {
-    var progressCallback: (Float) -> Unit = { }
 
-    private val progressInAverageRGB = 0.4f
-    private val progressInCreateHistograms = 0.55f // leave a gap so we don't send 1f until actually complete
+class ColorCorrector(bitmap: Bitmap) {
+    private val originalPixels: IntArray
 
-    fun applyFilter(filter: ColorMatrix): Bitmap {
-        progressCallback(0f)
-        val newBitmap = Bitmap.createBitmap(bitmap.width, bitmap.height, bitmap.config)
-        val f = filter.values
-        val progressPerX = 1f / bitmap.width
-        for (x in 0 until bitmap.width) {
-            progressCallback(x * progressPerX)
-            for (y in 0 until bitmap.height) {
-                val old = bitmap.getPixel(x, y)
-                val r = Color.red(old)
-                val g = Color.green(old)
-                val b = Color.blue(old)
-                //val a = Color.alpha(old) // seems to assume alpha is always 255
-                val new = Color.argb(
-                    255,
-                    (r * f[0] + g * f[1] + b * f[2] + f[4] * 255).roundToInt().clip(0, 255),
-                    (g * f[6] + f[9] * 255).roundToInt().clip(0, 255),
-                    (b * f[12] + f[14] * 255).roundToInt().clip(0, 255)
-                )
-                newBitmap.setPixel(x, y, new)
-            }
-        }
-        progressCallback(1f)
-        return newBitmap
+    init {
+        originalPixels = IntArray(bitmap.width * bitmap.height)
+        bitmap.getPixels(originalPixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
     }
 
+    var progressCallback: (Float) -> Unit = { }
+    private val progressUpdateEvery = 100000 // pixels
+    private val progressInAverageRGB = 0.2f
+    private val progressInCreateHistograms = 0.75f // leave a gap so we don't send 1f until actually complete
+
     fun Int.clip(min: Int, max: Int): Int {
-        if (this < min)
-            return min
         if (this > max)
             return max
+        if (this < min)
+            return min
         return this
     }
 
@@ -54,18 +38,18 @@ class ColorCorrector(var bitmap: Bitmap) {
         var r = 0
         var g = 0
         var b = 0
-        val progressPerX = progressInAverageRGB / bitmap.width
-        for (x in 0 until bitmap.width) {
-            progressCallback(x * progressPerX)
-            for (y in 0 until bitmap.height) {
-                val color = bitmap.getPixel(x, y)
-                r += Color.red(color)
-                g += Color.green(color)
-                b += Color.blue(color)
+        val progressPerPixel = progressInAverageRGB / originalPixels.size
+        for (i in originalPixels.indices) {
+            if (i % progressUpdateEvery == 0) {
+                progressCallback(i * progressPerPixel)
             }
+            val color = originalPixels[i]
+            r += Color.red(color)
+            g += Color.green(color)
+            b += Color.blue(color)
         }
-        val total = (bitmap.width * bitmap.height).toDouble()
-        val average = DoubleColor(r/total, g/total, b/total)
+        val total = originalPixels.size.toDouble()
+        val average = DoubleColor(r / total, g / total, b / total)
         progressCallback(progressInAverageRGB)
         return average
     }
@@ -74,24 +58,16 @@ class ColorCorrector(var bitmap: Bitmap) {
         val histR = Histogram(0, 255)
         val histG = Histogram(0, 255)
         val histB = Histogram(0, 255)
-        val progressPerX = progressInCreateHistograms / bitmap.width
-        for (x in 0 until bitmap.width) {
-            progressCallback(progressInAverageRGB + x * progressPerX)
-            for (y in 0 until bitmap.height) {
-                val pixel = bitmap.getPixel(x, y)
-                val color = IntColor(pixel)
-
-                var shiftedR = hueShiftRed(color, hueShift).sum() // Use new calculated red value
-                if (shiftedR > 255) {
-                    shiftedR = 255
-                } else if (shiftedR < 0) { //TODO is this really possible
-                    shiftedR = 0
-                }
-
-                histR.increment(shiftedR)
-                histG.increment(color.g)
-                histB.increment(color.b)
+        val progressPerPixel = progressInCreateHistograms / originalPixels.size
+        for (i in originalPixels.indices) {
+            if (i % progressUpdateEvery == 0) {
+                progressCallback(progressInAverageRGB + i * progressPerPixel)
             }
+            val color = IntColor(originalPixels[i])
+            var shiftedR = hueShiftRed(color, hueShift).sum().clip(0, 255) // Use new calculated red value
+            histR.increment(shiftedR)
+            histG.increment(color.g)
+            histB.increment(color.b)
         }
         progressCallback(progressInAverageRGB + progressInCreateHistograms)
         return Triple(histR, histG, histB)
@@ -102,14 +78,13 @@ class ColorCorrector(var bitmap: Bitmap) {
         // Based on algorithm: https://github.com/nikolajbech/underwater-image-color-correction
 
         // Magic values:
-        val numOfPixels = bitmap.width * bitmap.height
         val thresholdRatio = 2000
-        val thresholdLevel = numOfPixels / thresholdRatio
+        val thresholdLevel = originalPixels.size / thresholdRatio
         val minAvgRed: Double = 60.0
         val maxHueShift: Int = 120
         val blueMagicValue: Float = 1.2f
 
-        // Calculate average color: (~4s)
+        // Calculate average color:
         val avg = averageRGB()
 
         // Calculate shift amount:
@@ -121,7 +96,7 @@ class ColorCorrector(var bitmap: Bitmap) {
             if (hueShift > maxHueShift) newAvgRed = 60.0 // Max value
         }
 
-        // Create histogram with new red values: (~6s)
+        // Create histogram with new red values:
         val (histR, histG, histB) = createHistograms(hueShift);
 
         // Normalise values:

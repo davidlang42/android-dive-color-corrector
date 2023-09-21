@@ -3,6 +3,9 @@ package com.davidlang.divecolorcorrector
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.ColorMatrixColorFilter
+import android.graphics.Paint
 import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
@@ -78,10 +81,12 @@ class ImageActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
                 ) {
-                    if (originalBitmap != null) {
+                    if (renderedBitmap != null) {
+                        ImageContent(renderedBitmap!!.asImageBitmap())
+                    } else if (originalBitmap != null) {
                         ImageContent(
                             originalBitmap!!.asImageBitmap(),
-                            ColorFilter.colorMatrix(filter ?: ColorMatrix().apply { setToSaturation(0f)}) // default to Black & White
+                            filter?.asColorFilter()
                         )
                     }
                     if (progress < 1f) {
@@ -121,13 +126,13 @@ class ImageActivity : ComponentActivity() {
                 val corrector = ColorCorrector(originalBitmap!!)
                 corrector.progressCallback = { f -> progress = f }
                 filter = corrector.underwaterFilter()
-                renderedBitmap = corrector.applyFilter(filter!!)
+                renderedBitmap = applyFilter(originalBitmap!!, filter!!)
             }
         }.start()
     }
 
     @Composable
-    fun ImageContent(image: ImageBitmap, filter: ColorFilter) {
+    fun ImageContent(image: ImageBitmap, filter: ColorFilter? = null) {
         Image(
             bitmap = image,
             contentDescription = "Color corrected image",
@@ -181,7 +186,19 @@ class ImageActivity : ComponentActivity() {
         }
     }
 
+    private fun ColorMatrix.asColorFilter(): ColorFilter? {
+        return ColorFilter.colorMatrix(this)
+    }
+
     companion object {
+        private fun applyFilter(bitmap: Bitmap, filter: ColorMatrix): Bitmap {
+            val paint = Paint().apply { colorFilter = ColorMatrixColorFilter(filter.values) }
+            val newBitmap = Bitmap.createBitmap(bitmap.width, bitmap.height, bitmap.config)
+            val canvas = Canvas(newBitmap)
+            canvas.drawBitmap(bitmap, 0f, 0f, paint)
+            return newBitmap
+        }
+
         private fun readExifData(fileDescriptor: FileDescriptor): Map<String, String> {
             val data = mutableMapOf<String, String>()
             val exifReader = ExifInterface(fileDescriptor)
