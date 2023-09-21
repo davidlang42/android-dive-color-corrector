@@ -16,6 +16,7 @@ import kotlin.math.sin
 class ColorCorrector(var bitmap: Bitmap) {
     var progressCallback: (Float) -> Unit = { }
 
+    private val progressUpdateEvery = 1000000 // update every megapixel
     private val progressInAverageRGB = 0.4f
     private val progressInCreateHistograms = 0.55f // leave a gap so we don't send 1f until actually complete
 
@@ -39,18 +40,20 @@ class ColorCorrector(var bitmap: Bitmap) {
         var r = 0
         var g = 0
         var b = 0
-        val progressPerX = progressInAverageRGB / bitmap.width
-        for (x in 0 until bitmap.width) {
-            progressCallback(x * progressPerX)
-            for (y in 0 until bitmap.height) {
-                val color = bitmap.getPixel(x, y)
-                r += Color.red(color)
-                g += Color.green(color)
-                b += Color.blue(color)
+        val pixels = IntArray(bitmap.width * bitmap.height)
+        bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+        val progressPerPixel = progressInAverageRGB / pixels.size
+        for (i in pixels.indices) {
+            if (i % progressUpdateEvery == 0) {
+                progressCallback(i * progressPerPixel)
             }
+            val color = pixels[i]
+            r += Color.red(color)
+            g += Color.green(color)
+            b += Color.blue(color)
         }
-        val total = (bitmap.width * bitmap.height).toDouble()
-        val average = DoubleColor(r/total, g/total, b/total)
+        val total = pixels.size.toDouble()
+        val average = DoubleColor(r / total, g / total, b / total)
         progressCallback(progressInAverageRGB)
         return average
     }
@@ -94,7 +97,7 @@ class ColorCorrector(var bitmap: Bitmap) {
         val maxHueShift: Int = 120
         val blueMagicValue: Float = 1.2f
 
-        // Calculate average color: (~4s)
+        // Calculate average color:
         val avg = averageRGB()
 
         // Calculate shift amount:
