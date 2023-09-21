@@ -13,20 +13,18 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 
 
-class ColorCorrector(var bitmap: Bitmap) {
-    var progressCallback: (Float) -> Unit = { }
+class ColorCorrector(bitmap: Bitmap) {
+    private val originalPixels: IntArray
 
+    init {
+        originalPixels = IntArray(bitmap.width * bitmap.height)
+        bitmap.getPixels(originalPixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+    }
+
+    var progressCallback: (Float) -> Unit = { }
     private val progressUpdateEvery = 100000 // pixels
     private val progressInAverageRGB = 0.2f
     private val progressInCreateHistograms = 0.75f // leave a gap so we don't send 1f until actually complete
-
-    fun applyFilter(filter: ColorMatrix): Bitmap {
-        val paint = Paint().apply { colorFilter = ColorMatrixColorFilter(filter.values) }
-        val newBitmap = Bitmap.createBitmap(bitmap.width, bitmap.height, bitmap.config)
-        val canvas = Canvas(newBitmap)
-        canvas.drawBitmap(bitmap, 0f, 0f, paint)
-        return newBitmap
-    }
 
     fun Int.clip(min: Int, max: Int): Int {
         if (this < min)
@@ -40,19 +38,17 @@ class ColorCorrector(var bitmap: Bitmap) {
         var r = 0
         var g = 0
         var b = 0
-        val pixels = IntArray(bitmap.width * bitmap.height)
-        bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
-        val progressPerPixel = progressInAverageRGB / pixels.size
-        for (i in pixels.indices) {
+        val progressPerPixel = progressInAverageRGB / originalPixels.size
+        for (i in originalPixels.indices) {
             if (i % progressUpdateEvery == 0) {
                 progressCallback(i * progressPerPixel)
             }
-            val color = pixels[i]
+            val color = originalPixels[i]
             r += Color.red(color)
             g += Color.green(color)
             b += Color.blue(color)
         }
-        val total = pixels.size.toDouble()
+        val total = originalPixels.size.toDouble()
         val average = DoubleColor(r / total, g / total, b / total)
         progressCallback(progressInAverageRGB)
         return average
@@ -62,15 +58,13 @@ class ColorCorrector(var bitmap: Bitmap) {
         val histR = Histogram(0, 255)
         val histG = Histogram(0, 255)
         val histB = Histogram(0, 255)
-        val pixels = IntArray(bitmap.width * bitmap.height)
-        bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
-        val progressPerPixel = progressInCreateHistograms / pixels.size
-        for (i in pixels.indices) {
+        val progressPerPixel = progressInCreateHistograms / originalPixels.size
+        for (i in originalPixels.indices) {
             if (i % progressUpdateEvery == 0) {
                 progressCallback(progressInAverageRGB + i * progressPerPixel)
             }
 
-            val color = IntColor(pixels[i])
+            val color = IntColor(originalPixels[i])
 
             var shiftedR = hueShiftRed(color, hueShift).sum() // Use new calculated red value
             if (shiftedR > 255) {
@@ -92,9 +86,8 @@ class ColorCorrector(var bitmap: Bitmap) {
         // Based on algorithm: https://github.com/nikolajbech/underwater-image-color-correction
 
         // Magic values:
-        val numOfPixels = bitmap.width * bitmap.height
         val thresholdRatio = 2000
-        val thresholdLevel = numOfPixels / thresholdRatio
+        val thresholdLevel = originalPixels.size / thresholdRatio
         val minAvgRed: Double = 60.0
         val maxHueShift: Int = 120
         val blueMagicValue: Float = 1.2f
