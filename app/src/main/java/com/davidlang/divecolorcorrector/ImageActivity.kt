@@ -9,7 +9,6 @@ import android.graphics.Paint
 import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
-import android.os.ParcelFileDescriptor
 import android.os.Parcelable
 import android.provider.OpenableColumns
 import android.widget.Toast
@@ -186,7 +185,7 @@ class ImageActivity : ComponentActivity() {
         }
     }
 
-    private fun ColorMatrix.asColorFilter(): ColorFilter? {
+    private fun ColorMatrix.asColorFilter(): ColorFilter {
         return ColorFilter.colorMatrix(this)
     }
 
@@ -194,7 +193,7 @@ class ImageActivity : ComponentActivity() {
         private fun applyFilter(bitmap: Bitmap, filter: ColorMatrix): Bitmap {
             val paint = Paint().apply { colorFilter = ColorMatrixColorFilter(filter.values) }
             if (bitmap.config == null) {
-                throw Exception("Bitmap configuration not found");
+                throw Exception("Bitmap configuration not found")
             }
             val newBitmap = Bitmap.createBitmap(bitmap.width, bitmap.height, bitmap.config!!)
             val canvas = Canvas(newBitmap)
