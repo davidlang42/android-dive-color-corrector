@@ -1,16 +1,19 @@
 package com.davidlang.divecolorcorrector
 
+import android.content.ContentValues
 import android.content.Intent
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Environment
-import android.os.ParcelFileDescriptor
 import android.os.Parcelable
+import android.provider.MediaStore
 import android.provider.OpenableColumns
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -44,6 +47,8 @@ import androidx.exifinterface.media.ExifInterface
 import com.davidlang.divecolorcorrector.ui.theme.DiveColorCorrectorTheme
 import java.io.File
 import java.io.FileDescriptor
+import java.io.IOException
+import java.io.OutputStream
 
 class ImageActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -94,7 +99,7 @@ class ImageActivity : ComponentActivity() {
                     }
                 }
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Button(
@@ -106,7 +111,7 @@ class ImageActivity : ComponentActivity() {
                     if (renderedBitmap != null && exifData != null) {
                         Button(
                             onClick = {
-                                saveBitmap(renderedBitmap!!, exifData!!, uri)
+                                saveBitmap(applicationContext, renderedBitmap!!, exifData!!, uri)
                                 finish()
                             },
                             modifier = Modifier.padding(10.dp),
@@ -147,32 +152,48 @@ class ImageActivity : ComponentActivity() {
         }
     }
 
-    private fun saveBitmap(bitmap: Bitmap, exifData: Map<String, String>, originalUri: Uri) {
-        // Determine file name
+    private fun saveBitmap(context: Context, bitmap: Bitmap, exifData: Map<String, String>, originalUri: Uri) {
+        // Use the appropriate collection URI
+        val imageCollection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+        } else {
+            MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+        }
+        // Details for the new image file
         val originalName = removeExtension(sanitizeFileName(getFileName(originalUri)))
-        val filePath = Environment.getExternalStorageDirectory().absolutePath + "/Pictures/DiveColorCorrector"
-        val dir = File(filePath)
-        if (!dir.exists())
-            dir.mkdirs()
-        var file = File(dir, "${originalName}_corrected.jpg")
-        var i = 1
-        while (file.exists()) {
-            file = File(dir, "${originalName}_corrected ($i).jpg")
-            i += 1
+        val contentValues = ContentValues().apply {
+            put(MediaStore.Images.Media.DISPLAY_NAME, "${originalName}_corrected.jpg")
+            put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+            // For Android Q (API 29) and above, use RELATIVE_PATH
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES)
+            }
         }
-        // Save bitmap as JPEG
-        val fOut = file.outputStream()
-        bitmap.compress(Bitmap.CompressFormat.JPEG, 95, fOut)
-        fOut.flush()
-        fOut.close()
-        // Add EXIF data
-        val exifInterface = ExifInterface(file)
-        for ((tag, value) in exifData) {
-            exifInterface.setAttribute(tag, value)
+        // Insert a new record into the MediaStore and save the image (no exif data)
+        var uri: Uri? = null
+        val resolver = context.contentResolver
+        try {
+            uri = resolver.insert(imageCollection, contentValues)
+            if (uri != null) {
+                val outputStream: OutputStream? = resolver.openOutputStream(uri)
+                outputStream?.use { stream ->
+                    // Compress the bitmap into the output stream
+                    if (!bitmap.compress(Bitmap.CompressFormat.JPEG, 95, stream)) {
+                        throw IOException("Failed to save bitmap.")
+                    }
+                } ?: throw IOException("Failed to open output stream.");
+            }
+        } catch (e: IOException) {
+            e.printStackTrace()
+            // If an error occurs, delete the partially created entry
+            if (uri != null) {
+                resolver.delete(uri, null, null)
+            }
+            Toast.makeText(this, "Failed to save file", Toast.LENGTH_SHORT).show()
+            return
         }
-        exifInterface.saveAttributes()
-        // Tell the user we're awesome
-        Toast.makeText(this, "Saved as ${file.name}", Toast.LENGTH_SHORT).show()
+        // Tell the user we succeeded
+        Toast.makeText(this, "Saved as ${uri}", Toast.LENGTH_SHORT).show()
     }
 
     private fun getFileName(uri: Uri): String {
@@ -186,14 +207,17 @@ class ImageActivity : ComponentActivity() {
         }
     }
 
-    private fun ColorMatrix.asColorFilter(): ColorFilter? {
+    private fun ColorMatrix.asColorFilter(): ColorFilter {
         return ColorFilter.colorMatrix(this)
     }
 
     companion object {
         private fun applyFilter(bitmap: Bitmap, filter: ColorMatrix): Bitmap {
             val paint = Paint().apply { colorFilter = ColorMatrixColorFilter(filter.values) }
-            val newBitmap = Bitmap.createBitmap(bitmap.width, bitmap.height, bitmap.config)
+            if (bitmap.config == null) {
+                throw Exception("Bitmap configuration not found")
+            }
+            val newBitmap = Bitmap.createBitmap(bitmap.width, bitmap.height, bitmap.config!!)
             val canvas = Canvas(newBitmap)
             canvas.drawBitmap(bitmap, 0f, 0f, paint)
             return newBitmap
