@@ -193,7 +193,10 @@ class ImageActivity : ComponentActivity() {
     companion object {
         private fun applyFilter(bitmap: Bitmap, filter: ColorMatrix): Bitmap {
             val paint = Paint().apply { colorFilter = ColorMatrixColorFilter(filter.values) }
-            val newBitmap = Bitmap.createBitmap(bitmap.width, bitmap.height, bitmap.config)
+            if (bitmap.config == null) {
+                throw Exception("Bitmap configuration not found");
+            }
+            val newBitmap = Bitmap.createBitmap(bitmap.width, bitmap.height, bitmap.config!!)
             val canvas = Canvas(newBitmap)
             canvas.drawBitmap(bitmap, 0f, 0f, paint)
             return newBitmap
