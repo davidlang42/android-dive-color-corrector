@@ -93,7 +93,7 @@ class ImageActivity : ComponentActivity() {
                     }
                 }
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Button(
